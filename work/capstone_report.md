@@ -1,167 +1,157 @@
-# Content Decay & Refresh Prioritization
+# Capstone Report —
 
-**FlyRank ML Internship Capstone — Refresh / Content Opportunity Scoring**  
-**Author:** Hadia Fatima
+- **Author:** Hadia Fatima
+- **Lane:** Refresh / Content Opportunity Scoring
+- **Repo:** [Add your repository URL]
+- **Date:** 2026-08-10
 
-## Abstract
+## 1. Problem framing
 
-Which pages in a content portfolio should a human reviewer prioritize for refresh, and does a learned model rank them better than a simple, auditable rule? I built a transparent baseline using staleness, search demand, ranking position, and CTR, then compared it with Logistic Regression on the same anonymized FlyRank content dataset. The evaluation used a client-grouped 80/20 split, with 25 clients and 23,837 rows for training and 7 unseen clients and 6,163 rows for testing, with zero client overlap. On the held-out test set, Logistic Regression achieved Precision@50 of **0.72**, compared with **0.54** for the Week-4 baseline, an observed **18-percentage-point improvement** on this split. The resulting system is best treated as a ranked decision-support queue for human review, not as a causal model or a guarantee that refreshing a page will improve performance.
+This project supports the decision of **which content pages should be reviewed first for a possible refresh or optimisation**.
 
-## 1. Introduction / Problem Statement
+The unit of analysis is a **content page**. The output is a ranked action score and reason code that places pages into a priority queue. A human editor can use the queue to decide which pages to review for content refresh, existing-content optimisation, metadata/CTR improvement, or monitoring.
 
-Content teams often have more pages that could be reviewed than they have time to review. The practical decision is therefore:
+The cost of a wrong call is mainly wasted editorial effort: a page may be prioritised even though it does not actually need a refresh, while a genuinely useful opportunity may be missed. Data and ML help because the warehouse contains multiple signals about search demand, ranking, traffic, engagement, content age, and freshness. A model can combine these signals consistently and produce a ranked queue that can be compared with a transparent rule.
 
-> **Which pages should an editor or SEO analyst review first for refresh, optimisation, or continued monitoring?**
+This is **decision-support**, not an automated claim that a page will definitely decline or that changing a page will cause a particular search outcome.
 
-The unit of analysis is an individual webpage represented by `content_id`.
+## 2. Data safety
 
-The desired output is not simply a probability. It is a ranked queue that helps a human decide what to inspect first and why.
+The analysis uses the anonymized FlyRank content-refresh dataset used in the weekly assignments. The working starter dataset contains **30,000 rows and 44 columns**, covering **32 pseudonymous clients**.
 
-A simple rule is useful because it is transparent and easy to audit. However, content performance can reflect several signals at once, including historical engagement, freshness, search demand, ranking position, content format, and intent. Logistic Regression provides an interpretable first model that can combine these signals and be compared fairly against the hand-written baseline.
+The analysis uses content/search, traffic, engagement, freshness, and content metadata fields. The pseudonymous `client_id` is used only for the grouped train/test split and is **not used as a model feature**.
 
-This project therefore belongs to the **Refresh / Content Opportunity Scoring** lane.
+The following fields were deliberately excluded from the Logistic Regression features:
 
-## 2. Data
+- `trend_direction` — this defines the observed decline target.
+- `trend_pct` — this is directly related to the observed trend outcome.
+- `impressions_last_30d` — excluded because it contributes directly to the observed 30-day trend comparison.
+- `impressions_prev_30d` — excluded for the same leakage concern.
+- The baseline's own score, reason code, and action outputs — these are decision outputs, not predictive inputs.
 
-### Dataset
+The target was defined as:
 
-The analysis uses the FlyRank ML Internship Search Intelligence capstone release:
+> `1` when `trend_direction == "down"`, otherwise `0`.
 
-- **Table:** `content_refresh_anonymized.csv`
-- **Rows:** 30,000
-- **Columns:** 44
-- **Pseudonymous clients:** 32
-- **Unit:** content item / webpage
+The model therefore predicts an **observed decline label**, not a future causal effect.
 
-### Reporting window
+The release exposes 90-day aggregate performance fields and a last-30-days versus previous-30-days comparison. The completed notebooks do not establish calendar start/end dates for the release, so no calendar date window is invented here.
 
-The anonymized release does not expose calendar start/end dates. The available performance fields describe a **90-day performance window**, while the trend fields compare the **last 30 days with the previous 30 days**.
+The data is anonymized. No client names, domains, URLs, private queries, credentials, or raw client exports are included in the analysis outputs. Pseudonymous IDs are used only where necessary for grouping and identification inside the dataset.
 
-This distinction matters: the model is evaluated using the observed trend field, while the input features are restricted to information treated as available from the historical content state.
+## 3. Baseline
 
-### Public-safe exclusions
+The first approach was a transparent rule-based action score.
 
-The release and this paper exclude:
+The baseline gives points for four signals:
 
-- client names
-- domains
-- private search queries
-- raw URLs
-- credentials
-- other client-identifying information
+- **Staleness:** `days_since_last_update > 180` → +40
+- **Search demand:** `search_volume >= 100` → +30
+- **Ranking opportunity:** `avg_position` between 8 and 20 → +20
+- **CTR opportunity:** `ctr < 2` → +10
 
-The dataset uses pseudonymous `client_id` and `content_id` values.
+The resulting score creates a ranked review queue.
 
-## 3. Methodology
+The baseline reason codes map signals to actions:
 
-### 3.1 Baseline
-
-The Week-4 baseline is a transparent scoring rule.
-
-A page receives more priority when it:
-
-1. has not been updated for a long time;
-2. has meaningful search demand;
-3. ranks around positions 8–20, where improvement may be actionable;
-4. has low CTR.
-
-The baseline produces reason codes that connect signals to actions:
-
-| Reason code | Meaning | Recommended action |
+| Reason code | Meaning | Action |
 |---|---|---|
-| `STALE_REFRESH` | Old page with a refresh opportunity | Refresh Content |
-| `CTR_FIX` | CTR opportunity | Improve Title & Meta |
-| `QUICK_WIN` | Near page one with meaningful demand | Optimise Existing Content |
-| `LOW_PRIORITY` | Does not meet the main signals | Monitor |
+| `STALE_REFRESH` | Old content with a refresh opportunity | Refresh Content |
+| `QUICK_WIN` | Ranking/search-demand opportunity | Optimise Existing Content |
+| `CTR_FIX` | Low CTR opportunity | Improve Title & Meta |
+| `LOW_PRIORITY` / `MONITOR` | Does not meet the stronger priority conditions | Monitor |
 
-The baseline is intentionally simple. Its purpose is to create an auditable benchmark rather than to claim that these thresholds are universally optimal.
+The baseline is a fair comparison because it is transparent, deterministic, and was evaluated on the **same held-out test data and the same Precision@50 metric** as the Logistic Regression model.
 
-### 3.2 Model
+On the client-grouped test split, the baseline achieved:
 
-I selected **Logistic Regression** as the first machine-learning method.
+**Precision@50 = 0.54**
 
-It fits the task because:
+The test-set decline base rate was:
 
-- it produces a probability score that can rank pages;
-- its coefficients can be inspected;
-- it is relatively simple to reproduce;
-- it provides a fair first comparison against the transparent baseline.
+**51.1%**
 
-The observed target is:
+Therefore the baseline's top-50 precision was above the overall decline rate, but it was still treated as a simple benchmark rather than as a validated causal rule.
 
-```text
-target = 1 when trend_direction == "down"
-target = 0 otherwise
-```
+## 4. Model / analysis
 
-This is an observed historical outcome. It should not be described as a guaranteed future prediction.
+The selected method is **Logistic Regression**.
 
-### 3.3 Split design
+It fits the lane because the task is to identify pages associated with the observed decline label and then use the predicted probability to **rank pages for review**. Logistic Regression is also interpretable, making it suitable as a first model before trying more complex methods.
 
-I used `GroupShuffleSplit` with `client_id` as the grouping variable and `random_state = 42`.
+The numerical features used were:
 
-| Split | Rows | Clients |
+- `search_volume`
+- `competition`
+- `cpc`
+- `word_count`
+- `char_count`
+- `impressions_90d`
+- `clicks_90d`
+- `pageviews_90d`
+- `sessions_90d`
+- `users_90d`
+- `engaged_sessions_90d`
+- `ai_sessions_90d`
+- `scroll_events_90d`
+- `days_with_impressions`
+- `days_with_sessions`
+- `content_age_days`
+- `age_tier_order`
+- `days_since_last_update`
+- `ctr`
+- `avg_position`
+- `engagement_rate`
+- `scroll_rate`
+- `ai_traffic_pct`
+
+The categorical features used were:
+
+- `competition_level`
+- `content_type`
+- `main_intent`
+- `provider_used`
+
+Numeric missing values were median-imputed and standardized. Categorical missing values were filled with the most frequent value and then one-hot encoded. The classifier was Logistic Regression with `max_iter=1000`.
+
+The target/proxy definition is:
+
+> The target is 1 for pages whose observed `trend_direction` is `"down"` and 0 otherwise.
+
+The model deliberately does **not** use the observed trend fields or the 30-day impression fields that could reveal the outcome.
+
+## 5. Evaluation
+
+The evaluation uses a **grouped train/test split by `client_id`**.
+
+There are 32 clients in total. The split produced:
+
+- **25 training clients**
+- **7 test clients**
+- **23,837 training rows**
+- **6,163 test rows**
+- **0 client overlap**
+
+The split uses `random_state = 42` so it can be reproduced.
+
+Grouping by client is intended to test whether the model can generalise to clients that were not represented in training, rather than benefiting from near-duplicate client-specific patterns across both sets.
+
+Both the baseline and model were evaluated on exactly the same held-out test clients using Precision@50.
+
+| Method | Precision@50 | Test decline base rate |
 |---|---:|---:|
-| Train | 23,837 | 25 |
-| Test | 6,163 | 7 |
+| Week-4 baseline | 0.540 | 0.511 |
+| Logistic Regression | 0.720 | 0.511 |
 
-**Client overlap: 0**
+The Logistic Regression model therefore measured **18 percentage points higher Precision@50** than the baseline on this held-out client split.
 
-Grouping by client is more conservative than randomly splitting rows because pages belonging to the same client can share characteristics. A random row split could therefore make evaluation look easier by placing related pages in both training and testing.
+The model's top-50 selection contained **14 false positives**. These are pages that the model ranked in its top 50 but whose observed test target was not decline. This shows that the ranking is useful but imperfect.
 
-The observed decline rate was **55.0%** in training and **51.1%** in testing.
+The result should not be interpreted as proof of future performance. It is an observed result on one fixed client-grouped test split.
 
-### 3.4 Leakage controls
+## 6. Interpretation
 
-The following fields were excluded from model inputs:
-
-- `trend_direction`
-- `trend_pct`
-- `impressions_last_30d`
-- `impressions_prev_30d`
-- baseline-generated `action_label`
-- baseline-generated `reason_code`
-- baseline-generated `score`
-
-The first two define the target. The last-30-day impression fields directly contribute to the observed trend calculation. The baseline outputs are excluded because they are decisions produced by the benchmark rather than independent real-world inputs.
-
-The remaining features describe historical content, search, traffic, engagement, and content attributes.
-
-## 4. Results
-
-### 4.1 Model versus baseline
-
-Both approaches were evaluated on the **same held-out clients**, using **Precision@50**.
-
-| Method | Precision@50 |
-|---|---:|
-| Week-4 rule-based baseline | **0.54** |
-| Logistic Regression | **0.72** |
-| Test base rate | **0.511** |
-
-The Logistic Regression model therefore produced an observed **18 percentage-point improvement** in Precision@50 over the baseline on this particular held-out client split.
-
-This means that, among the 50 highest-ranked test items, the model selected more items matching the observed decline label than the baseline did.
-
-It does **not** mean that the model will always achieve 72% precision on new data, nor that refreshing those pages will cause recovery.
-
-### 4.2 Error analysis
-
-The model had **14 false positives in its top-50 predictions**.
-
-A false positive here means that an item was ranked in the model's top 50 but its observed test target was not `down`.
-
-This is important because the system is intended for human decision support. A high score should mean:
-
-> **Review this page first.**
-
-It should not mean:
-
-> **This page definitely needs a refresh.**
-
-### 4.3 What the model relied on
-
-The largest absolute Logistic Regression coefficients included:
+The largest absolute Logistic Regression coefficients in the completed analysis included:
 
 | Feature | Coefficient |
 |---|---:|
@@ -169,151 +159,113 @@ The largest absolute Logistic Regression coefficients included:
 | `sessions_90d` | +0.770 |
 | `days_with_impressions` | +0.604 |
 | `main_intent_navigational` | -0.450 |
-| `days_with_sessions` | -0.426 |
+| `days_with_sessions` | -0.427 |
 | `content_type_keyword article` | +0.357 |
-| `content_type_feedly article` | -0.339 |
-| `content_age_days` | -0.289 |
+| `content_type_feedly article` | -0.340 |
+| `content_age_days` | -0.288 |
 | `scroll_events_90d` | +0.281 |
-| `word_count` | +0.242 |
+| `word_count` | +0.243 |
 
-These coefficients describe **directional associations within this fitted model**. They are not causal effects.
+The model therefore leaned strongly on historical traffic/activity signals, including users, sessions, and the number of days with impressions or sessions. Content characteristics also contributed to the ranking.
 
-The model's strongest signals were largely related to historical engagement and consistency. This suggests that age or search volume alone should not be treated as sufficient evidence for a refresh decision.
+The important interpretation is **directional rather than causal**. A positive or negative coefficient describes how the feature is associated with the model's predicted probability after preprocessing; it does not show that changing that feature will cause content to decline or recover.
 
-## 5. Validation and Research Context
+A useful negative result is that the baseline signals should not be treated as guaranteed causes of decline. The Week-4 signal checks supported using freshness and search demand as prioritisation signals, but the later model shows that the final ranking also depends on several historical activity and content features.
 
-The weekly validation work also compared the modeling choices with findings from the FlyRank research material.
+The false positives are also important. For example, some highly ranked pages had high model scores even though the observed target was 0. This means the model should be used to create a **review queue**, not an automatic action system.
 
-Two relevant findings were:
+## 7. Recommendation
 
-1. Growing content in the broader FlyRank research dataset tended to be younger and longer than declining content.
-2. Content performance showed a lifecycle pattern in which performance weakened in older age bands, while refreshed older pages could behave differently.
+The output supports a practical editorial queue:
 
-These findings provide useful context for including freshness and content-depth variables, but they do not prove that age or word count causes decline.
+| Priority/action | Use |
+|---|---|
+| **Refresh Content** | Review stale pages with stronger evidence of decline/opportunity. |
+| **Optimise Existing Content** | Review pages with useful search demand and ranking opportunity. |
+| **Improve Title & Meta** | Review pages where low CTR makes metadata optimisation worth checking. |
+| **Monitor** | Keep weaker-signal pages under observation rather than spending immediate editorial effort. |
 
-The capstone therefore treats these signals as evidence to investigate rather than as automatic rules.
+A FlyRank editor could start with the highest-ranked pages, inspect the reason code and underlying signals, and then decide whether the page genuinely deserves intervention.
 
-## 6. Limitations & Honest Framing
+The model's **0.72 Precision@50** makes it a stronger measured ranking tool than the **0.54 baseline** on this test split. However, the confidence should remain limited to **decision-support** because:
 
-This project should be interpreted as **decision-support evidence**.
+- the evaluation uses one fixed client-grouped split;
+- the target is an observed trend label rather than a future experimental outcome;
+- the model has false positives;
+- the data is anonymized;
+- the analysis does not establish causal effects of refreshing content;
+- the model does not prove anything about Google's ranking algorithm.
 
-### Observed, not causal
+The recommended workflow is therefore:
 
-The reported 0.72 Precision@50 is an observed result on one held-out client split. The coefficients show associations with the observed decline label; they do not establish causal mechanisms.
+**Model ranks → human reviews → editor decides action → outcome is monitored.**
 
-### One split and one seed
-
-The evaluation uses one client-grouped split with `random_state = 42`. A different held-out set could produce a different result.
-
-### Directional label
-
-The target is derived from `trend_direction`. It is therefore an operational definition of decline rather than an independent ground-truth measure of business harm.
-
-### Portfolio-specific
-
-The dataset contains 30,000 anonymized records across 32 clients. Results may not generalise to a different portfolio, industry mix, traffic distribution, or content system.
-
-### Priority is not success probability
-
-A high-ranked page is a page worth reviewing. It is not proof that a refresh will work.
-
-### No causal Google claim
-
-Nothing in this analysis establishes how Google's ranking system works, proves an algorithmic cause, or demonstrates that a particular content change causes a ranking recovery.
-
-## 7. Ranked Recommendations
-
-The practical output is a ranked, reason-coded review queue.
-
-### Priority 1 — Stale content with strong opportunity signals
-
-**Reason code:** `STALE_REFRESH`  
-**Action:** Refresh Content
-
-Prioritise pages that combine long time since update with meaningful visibility or demand signals. Review whether the content has become outdated, thin, incomplete, or less aligned with current search intent.
-
-### Priority 2 — Near-page-one opportunities
-
-**Reason code:** `QUICK_WIN`  
-**Action:** Optimise Existing Content
-
-Review pages ranking around positions 8–20 with meaningful search demand. These are candidates for targeted optimisation rather than automatic rewriting.
-
-### Priority 3 — CTR opportunities
-
-**Reason code:** `CTR_FIX`  
-**Action:** Improve Title & Meta
-
-Investigate low CTR in context. A low CTR does not automatically mean the metadata is wrong; SERP features, intent mismatch, and other factors can contribute.
-
-### Priority 4 — Weak or ambiguous signals
-
-**Reason code:** `LOW_PRIORITY` / `MONITOR`  
-**Action:** Monitor
-
-Avoid spending immediate editorial effort on pages without a clear opportunity signal. Continue monitoring until stronger evidence appears.
-
-### Action principle
-
-The model and baseline should be used as a **review queue**, with a human checking the page before taking action.
+The ranked recommendations should be treated as opportunities for investigation, not guaranteed fixes.
 
 ## 8. Reproducibility
 
-The capstone is designed to be reproducible from the repository.
+The analysis should be rerun from a fresh clone using the repository's documented environment.
 
-Expected notebook structure:
+Core environment:
 
-```text
-work/
-└── notebooks/
-    ├── w04_baseline_score.ipynb
-    ├── w05_model.ipynb
-    ├── w06_validation_audit.ipynb
-    └── w07_action_playbook.ipynb
-```
+- Python
+- pandas
+- numpy
+- scikit-learn
+- pathlib
+- DuckDB where used by the earlier data workflow
 
-The main modeling run uses:
+The model uses:
 
 ```text
 random_state = 42
 ```
 
-Core Python packages include:
+The evaluation uses:
 
 ```text
-pandas
-numpy
-scikit-learn
+GroupShuffleSplit(
+    n_splits=1,
+    test_size=0.20,
+    random_state=42
+)
 ```
 
-A pinned `requirements.txt` should be included at the repository root before final submission.
+The repository should contain:
 
-The baseline/action queue is exported as a CSV so that the ranked output can be inspected independently of the notebook.
+```text
+work/
+├── notebooks/
+│   ├── ML-04...
+│   ├── ML-05...
+│   ├── ML-06...
+│   └── ML-07...
+├── outputs/
+│   └── baseline_action_score.csv
+└── capstone_report.md
 
-The deployed paper URL belongs in:
+submission/
+└── paper_url.txt
+```
+
+The exact notebook filenames should match the files committed in the repository.
+
+The baseline output is written to:
+
+```text
+work/outputs/baseline_action_score.csv
+```
+
+The final paper URL must be stored as the only line in:
 
 ```text
 submission/paper_url.txt
 ```
 
-That file should contain exactly one line: the direct URL of the deployed paper.
+A pinned `requirements.txt` should also be committed so that the environment used for the final run can be reproduced.
 
-## 9. Acknowledgments & Data Credit
-
-Built on the **FlyRank ML Internship dataset**.
-
-Data source: [FlyRank](https://flyrank.ai)
-
-This project uses the anonymized capstone release for research and educational analysis. No client names, domains, private queries, credentials, or other identifying information are published.
+Before submission, run the notebooks from top to bottom and verify that the reported metrics still match the fresh run.
 
 ---
 
-## Final takeaway
-
-The main result is straightforward:
-
-> **On the held-out client split used here, Logistic Regression ranked declining content more precisely than the Week-4 hand-written baseline at the top of the queue: 0.72 versus 0.54 Precision@50.**
-
-The important qualification is equally straightforward:
-
-> **This is an observed, portfolio-specific decision-support result — not a causal claim, not a guarantee of future performance, and not proof of how a search engine ranks content.**
+> **Claims checklist before submitting:** observed / measured / directional / decision-support **Metrics vs. base rate:** the test decline base rate is 51.1%, reported next to Precision@50. No causal claims are made. No claim is made about predicting Google's algorithm. No client-identifying details, private queries, credentials, or raw exports are included.
