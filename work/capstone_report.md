@@ -2,7 +2,7 @@
 
 - **Author:** Hadia Fatima
 - **Lane:** Refresh / Content Opportunity Scoring
-- **Repo:** [Add your repository URL]
+- **Repo:** https://github.com/hadiafatima007/flyrank-ai-ml-internship
 - **Date:** 2026-08-10
 
 ## 1. Problem framing
