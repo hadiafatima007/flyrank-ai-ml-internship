@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Content Decay & Refresh Prioritization — FlyRank Capstone</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Newsreader:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#EFEDE2;
+    --paper-raised:#F7F5EB;
+    --ink:#171C17;
+    --ink-soft:#4A4F45;
+    --rule:#D8D4C4;
+    --flag:#B5651D;      /* refresh / warning signal */
+    --flag-soft:#EADFCB;
+    --stable:#1F6F63;    /* stable / improvement signal */
+    --stable-soft:#DCE7DF;
+    --monitor:#8B8D7F;   /* neutral / monitor signal */
+  }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Newsreader', serif;
+    font-size:18px;
+    line-height:1.6;
+  }
+  .wrap{max-width:760px;margin:0 auto;padding:0 28px;}
+  .mono{font-family:'JetBrains Mono', monospace;}
+
+  /* ---------- HERO ---------- */
+  header.hero{
+    padding:88px 0 56px;
+    border-bottom:1px solid var(--rule);
+  }
+  .eyebrow{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12.5px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--flag);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-bottom:22px;
+  }
+  .eyebrow::before{content:"";width:26px;height:1px;background:var(--flag);display:inline-block;}
+  h1{
+    font-family:'Fraunces', serif;
+    font-optical-sizing:auto;
+    font-weight:500;
+    font-size:clamp(34px,5.4vw,54px);
+    line-height:1.08;
+    letter-spacing:-0.01em;
+    margin:0 0 20px;
+  }
+  .subtitle{
+    font-size:17px;
+    color:var(--ink-soft);
+    max-width:56ch;
+    margin:0 0 34px;
+  }
+  .byline{
+    font-family:'JetBrains Mono', monospace;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    display:flex;
+    flex-wrap:wrap;
+    gap:4px 22px;
+    margin-bottom:38px;
+  }
+  .byline b{color:var(--ink);font-weight:600;}
+
+  /* signal stamp row — the signature element */
+  .stamp-row{display:flex;flex-wrap:wrap;gap:10px;}
+  .stamp{
+    font-family:'JetBrains Mono', monospace;
+    font-size:11.5px;
+    letter-spacing:.04em;
+    padding:6px 10px;
+    border-radius:3px;
+    border:1px solid currentColor;
+    white-space:nowrap;
+  }
+  .stamp.flag{color:var(--flag);background:var(--flag-soft);}
+  .stamp.stable{color:var(--stable);background:var(--stable-soft);}
+  .stamp.monitor{color:var(--monitor);background:#EDECE2;border-color:#C9CABC;}
+
+  /* ---------- ABSTRACT ---------- */
+  .abstract{
+    padding:44px 0 8px;
+    border-bottom:1px solid var(--rule);
+  }
+  .abstract p{font-size:18.5px;}
+  .abstract .label{
+    font-family:'JetBrains Mono',monospace;
+    font-size:12px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--ink-soft);margin-bottom:14px;
+  }
+
+  /* ---------- SECTIONS ---------- */
+  section{padding:52px 0;border-bottom:1px solid var(--rule);}
+  section:last-of-type{border-bottom:none;}
+  h2{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:28px;
+    margin:0 0 8px;
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+  }
+  h2 .num{font-family:'JetBrains Mono',monospace;font-size:14px;color:var(--flag);font-weight:500;}
+  h3{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:19px;
+    margin:30px 0 6px;
+  }
+  p{margin:0 0 16px;}
+  .lede{color:var(--ink-soft);font-size:16.5px;margin-bottom:26px;}
+  ul,ol{padding-left:22px;margin:0 0 16px;}
+  li{margin-bottom:6px;}
+  strong{font-weight:600;}
+  code, .kv code{font-family:'JetBrains Mono',monospace;font-size:.88em;background:var(--paper-raised);padding:1px 5px;border-radius:3px;border:1px solid var(--rule);}
+  a{color:var(--flag);}
+
+  .kv{
+    display:grid;
+    grid-template-columns:auto 1fr;
+    gap:8px 20px;
+    font-size:15.5px;
+    margin:18px 0 24px;
+    padding:18px 20px;
+    background:var(--paper-raised);
+    border:1px solid var(--rule);
+    border-radius:6px;
+  }
+  .kv dt{font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);align-self:start;padding-top:2px;}
+  .kv dd{margin:0;}
+
+  .callout{
+    border-left:3px solid var(--flag);
+    background:var(--flag-soft);
+    padding:14px 18px;
+    font-size:16px;
+    border-radius:0 4px 4px 0;
+    margin:20px 0;
+  }
+  .callout.stable{border-color:var(--stable);background:var(--stable-soft);}
+
+  /* ---------- CHARTS ---------- */
+  .chart-block{margin:26px 0 8px;}
+  .chart-caption{font-size:14px;color:var(--ink-soft);margin-top:10px;}
+  svg text{font-family:'JetBrains Mono',monospace;}
+  .bar-baseline{fill:var(--monitor);}
+  .bar-model{fill:var(--stable);}
+  .bar-pos{fill:var(--flag);}
+  .bar-neg{fill:var(--stable);}
+
+  /* ---------- table ---------- */
+  table{width:100%;border-collapse:collapse;font-size:15.5px;margin:18px 0;}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--rule);}
+  th{font-family:'JetBrains Mono',monospace;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);font-weight:500;}
+  td.num,th.num{text-align:right;font-family:'JetBrains Mono',monospace;}
+
+  /* reason code legend cards */
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0;}
+  @media (max-width:560px){.legend{grid-template-columns:1fr;}}
+  .legend .card{
+    border:1px solid var(--rule);
+    background:var(--paper-raised);
+    border-radius:6px;
+    padding:14px 16px;
+  }
+  .legend .card .code{font-family:'JetBrains Mono',monospace;font-size:12.5px;font-weight:600;}
+  .legend .card.flag{border-left:3px solid var(--flag);}
+  .legend .card.stable{border-left:3px solid var(--stable);}
+  .legend .card.monitor{border-left:3px solid var(--monitor);}
+  .legend .action{font-size:14.5px;color:var(--ink-soft);margin-top:3px;}
+
+  footer{padding:44px 0 90px;font-size:14.5px;color:var(--ink-soft);}
+  footer a{color:var(--ink-soft);text-decoration-color:var(--rule);}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">ML Capstone · Search Intelligence · Refresh &amp; Content Opportunity Scoring</div>
+    <h1>Content Decay &amp; Refresh Prioritization</h1>
+    <p class="subtitle">A ranked, reason-coded action model for deciding which pages in a search content portfolio deserve refresh attention first — and whether a learned model beats a transparent hand-written rule at that job.</p>
+    <div class="byline">
+      <span><b>Author</b> Hadia Fatima</span>
+      <span><b>Repo</b> <a href="https://github.com/hadiafatima007/flyrank-ai-ml-internship" class="mono">github.com/hadiafatima007/flyrank-ai-ml-internship</a></span>
+    </div>
+    <div class="stamp-row">
+      <span class="stamp flag">STALE_REFRESH → Refresh Content</span>
+      <span class="stamp flag">CTR_FIX → Improve Title &amp; Meta</span>
+      <span class="stamp stable">QUICK_WIN → Optimise Existing Content</span>
+      <span class="stamp monitor">LOW_PRIORITY → Monitor</span>
+    </div>
+  </header>
+
+  <div class="abstract">
+    <div class="label">Abstract</div>
+    <p>Which pages in a content portfolio should a human reviewer prioritize for refresh, and does a learned model rank them better than a simple, auditable rule? A transparent baseline rule (staleness, search demand, near-page-one ranking, low CTR) and a client-grouped Logistic Regression classifier were each trained and evaluated on 30,000 anonymized content records spanning 32 clients, using an 80/20 split by <code>client_id</code> so no client appeared in both sets. On the held-out clients, the model reached a Precision@50 of <strong>0.72</strong> against <strong>0.54</strong> for the rule-based baseline — an observed 18-percentage-point improvement on this split. Recent engagement recency and consistency (90-day sessions and users, days with impressions or sessions) carried the strongest associations with the decline label, more than raw content age or search volume alone. The output is a ranked, reason-coded queue for human review, not a certified prediction of business impact.</p>
+  </div>
+
+  <section id="intro">
+    <h2><span class="num">01</span>Introduction</h2>
+    <p class="lede">The decision this project supports, and why a model is worth building for it.</p>
+    <div class="kv">
+      <dt>Decision</dt><dd>Which webpages a content editor or SEO analyst should review first for refresh, optimization, or continued monitoring.</dd>
+      <dt>Unit of analysis</dt><dd>An individual webpage (<code>content_id</code>).</dd>
+      <dt>Output</dt><dd>A ranked, reason-coded action queue — not a single score, a labeled recommendation a human can act on or override.</dd>
+      <dt>Action taken</dt><dd>An editor updates, deprioritizes, or monitors a page based on its rank and reason code.</dd>
+      <dt>Cost of a wrong call</dt><dd>Time spent refreshing low-impact pages while genuinely declining, high-opportunity pages go unreviewed.</dd>
+      <dt>Why ML helps</dt><dd>Decline is driven by several interacting signals — engagement recency, freshness, intent, format — that a fixed rule can only combine one way. A model can weigh them jointly and be checked against the rule it's meant to improve on.</dd>
+    </div>
+  </section>
+
+  <section id="data">
+    <h2><span class="num">02</span>Data</h2>
+    <div class="kv">
+      <dt>Source</dt><dd>FlyRank ML Internship dataset, Search Intelligence capstone release.</dd>
+      <dt>Table</dt><dd><code>content_refresh_anonymized.csv</code> — 30,000 rows × 44 columns, 32 pseudonymous <code>client_id</code> values.</dd>
+      <dt>Date window</dt><dd>Not stated in the anonymized release used by the weekly notebooks — worth confirming and adding here before this paper ships, since the brief asks for it explicitly.</dd>
+      <dt>Excluded</dt><dd>Client names, domains, URLs, private search queries, and credentials — the release ships pre-anonymized with pseudonymous <code>client_id</code> and <code>content_id</code> values only.</dd>
+      <dt>Privacy check</dt><dd>No client-identifying information appears in this paper, the notebooks, or the exported action queue.</dd>
+    </div>
+  </section>
+
+  <section id="method">
+    <h2><span class="num">03</span>Methodology</h2>
+
+    <h3>Baseline: a transparent scoring rule</h3>
+    <p>The Week-4 baseline gives points for four signals: staleness (<code>days_since_last_update &gt; 180</code> → +40), search demand (<code>search_volume &gt;= 100</code> → +30), ranking opportunity (<code>avg_position</code> between 8 and 20 → +20), and a CTR opportunity (<code>ctr &lt; 2</code> → +10). The resulting score creates a ranked review queue and outputs one of four reason codes:</p>
+    <div class="legend">
+      <div class="card flag"><div class="code">STALE_REFRESH</div><div class="action">Old page, refresh opportunity → Refresh Content</div></div>
+      <div class="card flag"><div class="code">CTR_FIX</div><div class="action">CTR below expectation for its rank → Improve Title &amp; Meta</div></div>
+      <div class="card stable"><div class="code">QUICK_WIN</div><div class="action">Near page one, good demand → Optimise Existing Content</div></div>
+      <div class="card monitor"><div class="code">LOW_PRIORITY</div><div class="action">Doesn't meet key signals → Monitor</div></div>
+    </div>
+
+    <h3>Model: Logistic Regression</h3>
+    <p>Logistic Regression was chosen because the task is ranking, not just classifying: it produces a probability that can order a priority queue, it's simple enough to inspect coefficient-by-coefficient, and it gives a fair, interpretable first comparison against a hand-written rule before reaching for anything more complex.</p>
+    <p>Label: <code>1</code> when <code>trend_direction == "down"</code>, else <code>0</code> — an observed historical outcome, not a future prediction. Numeric features were median-imputed and standardized; categorical features were mode-imputed and one-hot encoded (<code>max_iter=1000</code>). Numeric inputs: <code>search_volume, competition, cpc, word_count, char_count, impressions_90d, clicks_90d, pageviews_90d, sessions_90d, users_90d, engaged_sessions_90d, ai_sessions_90d, scroll_events_90d, days_with_impressions, days_with_sessions, content_age_days, age_tier_order, days_since_last_update, ctr, avg_position, engagement_rate, scroll_rate, ai_traffic_pct</code>. Categorical inputs: <code>competition_level, content_type, main_intent, provider_used</code>.</p>
+
+    <h3>Split design</h3>
+    <p>Rows were split by grouping on <code>client_id</code> rather than at random, because pages belonging to the same client tend to share characteristics — a random row split would let the model partly memorize client identity instead of learning transferable signal.</p>
+    <div class="kv">
+      <dt>Split method</dt><dd><code>GroupShuffleSplit(n_splits=1, test_size=0.20, random_state=42)</code></dd>
+      <dt>Train / test</dt><dd>25 clients / 7 clients (of 32 total)</dd>
+      <dt>Rows</dt><dd>23,837 train · 6,163 test</dd>
+      <dt>Client overlap</dt><dd>0</dd>
+      <dt>Test base rate</dt><dd>51.1% decline</dd>
+    </div>
+
+    <h3>Leakage audit</h3>
+    <p>Fields describing the outcome itself, or derived from the baseline's own output, were excluded from the model's features:</p>
+    <ul>
+      <li><code>trend_direction</code>, <code>trend_pct</code> — these define the label</li>
+      <li><code>impressions_last_30d</code>, <code>impressions_prev_30d</code> — these directly feed the 30-day trend comparison the label is built from</li>
+      <li>the baseline's own score, reason code, and action outputs — decision outputs, not predictive inputs</li>
+    </ul>
+    <p>Remaining historical traffic and content attributes were treated as inputs describing observed state, not future-window or label-derived information.</p>
+
+    <h3>Grounding in prior research</h3>
+    <p>Two findings from the audited literature shaped which signals were trusted at face value rather than taken as causal rules. First, content performance was reported to peak around 61–90 days and decline afterward, with 365+ day recovery concentrated specifically in <em>refreshed</em> older pages — the source paper itself cautions against reading that as age improving performance on its own. Second, high search volume was reported as a weak predictor of page health by itself, with some lower-volume pages performing better — treated here as context rather than a standalone signal. Both findings are observational associations; neither was used to assert that any single feature causes decline or recovery.</p>
+  </section>
+
+  <section id="results">
+    <h2><span class="num">04</span>Results</h2>
+    <p>Model vs. baseline, evaluated on the same held-out clients with the same metric:</p>
+
+    <table>
+      <thead><tr><th>Method</th><th class="num">Precision@50</th><th class="num">Test base rate</th></tr></thead>
+      <tbody>
+        <tr><td>Week-4 rule-based baseline</td><td class="num">0.540</td><td class="num">0.511</td></tr>
+        <tr><td>Logistic Regression</td><td class="num">0.720</td><td class="num">0.511</td></tr>
+      </tbody>
+    </table>
+
+    <div class="chart-block">
+      <svg viewBox="0 0 640 150" width="100%" role="img" aria-label="Bar chart comparing Precision at 50 for baseline versus model">
+        <line x1="140" y1="20" x2="140" y2="130" stroke="#D8D4C4" stroke-width="1"/>
+        <!-- baseline -->
+        <text x="10" y="52" fill="#4A4F45" font-size="13">Baseline</text>
+        <rect x="140" y="34" width="291.6" height="26" class="bar-baseline" rx="2"/>
+        <text x="440" y="52" fill="#171C17" font-size="14" font-weight="600">0.54</text>
+        <!-- model -->
+        <text x="10" y="102" fill="#4A4F45" font-size="13">Log. Regr.</text>
+        <rect x="140" y="84" width="388.8" height="26" class="bar-model" rx="2"/>
+        <text x="537" y="102" fill="#171C17" font-size="14" font-weight="600">0.72</text>
+        <line x1="140" y1="130" x2="140" y2="20" stroke="#D8D4C4"/>
+        <text x="140" y="146" fill="#8B8D7F" font-size="11">0.0</text>
+        <text x="529" y="146" fill="#8B8D7F" font-size="11">1.0</text>
+      </svg>
+      <p class="chart-caption">Precision@50 on 6,163 held-out rows across 7 unseen clients (test base rate 51.1% decline). +18 percentage points, observed on this split. The model's top-50 selection contained 14 false positives — pages ranked highly whose observed label was not decline, which is why this stays a review queue rather than an automatic action system.</p>
+    </div>
+
+    <h3>What the model weighed most</h3>
+    <p>Top features by absolute coefficient magnitude — direction shows association with the decline label, not causation:</p>
+    <div class="chart-block">
+      <svg viewBox="0 0 640 300" width="100%" role="img" aria-label="Diverging bar chart of top model coefficients">
+        <line x1="320" y1="10" x2="320" y2="290" stroke="#D8D4C4" stroke-width="1"/>
+        <!-- rows: label, value, y -->
+        <!-- users_90d -0.988 -->
+        <text x="10" y="24" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">users_90d</text>
+        <rect x="176" y="14" width="144" height="16" class="bar-neg" rx="2"/>
+        <text x="164" y="26" fill="#171C17" font-size="11" text-anchor="end">-0.99</text>
+        <!-- sessions_90d +0.770 -->
+        <text x="10" y="52" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">sessions_90d</text>
+        <rect x="320" y="42" width="112" height="16" class="bar-pos" rx="2"/>
+        <text x="440" y="54" fill="#171C17" font-size="11">+0.77</text>
+        <!-- days_with_impressions +0.604 -->
+        <text x="10" y="80" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">days_with_impressions</text>
+        <rect x="320" y="70" width="88" height="16" class="bar-pos" rx="2"/>
+        <text x="416" y="82" fill="#171C17" font-size="11">+0.60</text>
+        <!-- main_intent_navigational -0.450 -->
+        <text x="10" y="108" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">intent: navigational</text>
+        <rect x="254" y="98" width="66" height="16" class="bar-neg" rx="2"/>
+        <text x="242" y="110" fill="#171C17" font-size="11" text-anchor="end">-0.45</text>
+        <!-- days_with_sessions -0.426 -->
+        <text x="10" y="136" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">days_with_sessions</text>
+        <rect x="258" y="126" width="62" height="16" class="bar-neg" rx="2"/>
+        <text x="246" y="138" fill="#171C17" font-size="11" text-anchor="end">-0.43</text>
+        <!-- content_type keyword article +0.357 -->
+        <text x="10" y="164" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">type: keyword article</text>
+        <rect x="320" y="154" width="52" height="16" class="bar-pos" rx="2"/>
+        <text x="380" y="166" fill="#171C17" font-size="11">+0.36</text>
+        <!-- content_type feedly article -0.339 -->
+        <text x="10" y="192" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">type: feedly article</text>
+        <rect x="271" y="182" width="49" height="16" class="bar-neg" rx="2"/>
+        <text x="259" y="194" fill="#171C17" font-size="11" text-anchor="end">-0.34</text>
+        <!-- content_age_days -0.289 -->
+        <text x="10" y="220" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">content_age_days</text>
+        <rect x="278" y="210" width="42" height="16" class="bar-neg" rx="2"/>
+        <text x="266" y="222" fill="#171C17" font-size="11" text-anchor="end">-0.29</text>
+        <!-- scroll_events_90d +0.281 -->
+        <text x="10" y="248" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">scroll_events_90d</text>
+        <rect x="320" y="238" width="41" height="16" class="bar-pos" rx="2"/>
+        <text x="369" y="250" fill="#171C17" font-size="11">+0.28</text>
+        <!-- word_count +0.242 -->
+        <text x="10" y="276" fill="#171C17" font-size="12.5" font-family="JetBrains Mono">word_count</text>
+        <rect x="320" y="266" width="36" height="16" class="bar-pos" rx="2"/>
+        <text x="364" y="278" fill="#171C17" font-size="11">+0.24</text>
+      </svg>
+      <p class="chart-caption"><span style="color:var(--stable)">Teal</span> = negative coefficient, associated with lower odds of the decline label. <span style="color:var(--flag)">Amber</span> = positive, associated with higher odds. Recency and consistency of engagement dominate; content age and search volume alone do not.</p>
+    </div>
+  </section>
+
+  <section id="limits">
+    <h2><span class="num">05</span>Limitations &amp; honest framing</h2>
+    <div class="callout">This is decision-support evidence, not proof. The 18-point precision gain is an observed result on one held-out client split with one random seed — it describes what happened on this evaluation, not a guaranteed future gain, and it does not establish that any feature <em>causes</em> decline.</div>
+    <ul>
+      <li><strong>Correlational, not causal.</strong> Coefficients show association with the decline label, not a mechanism.</li>
+      <li><strong>Single split, single seed.</strong> No cross-validation across multiple client folds was reported — the reported gap could shift with a different held-out client group.</li>
+      <li><strong>Label is directional by construction.</strong> "Declining" comes from an observed trend field, not an independent ground truth of business harm.</li>
+      <li><strong>Portfolio-specific.</strong> 30,000 pages across 32 clients may not represent a different content mix, vertical, or traffic profile.</li>
+      <li><strong>The score is a priority signal, not a probability of success.</strong> A high rank means "review this," not "refreshing this will work."</li>
+    </ul>
+  </section>
+
+  <section id="recommendations">
+    <h2><span class="num">06</span>Ranked recommendations</h2>
+    <p>The action playbook exports every page as a ranked, reason-coded row for human review — ordered by score, highest priority first. It is a queue for a person to work through, not an autonomous action engine.</p>
+    <table>
+      <thead><tr><th class="num">Rank</th><th>Reason code</th><th>Recommended action</th><th class="num">Sample score</th></tr></thead>
+      <tbody>
+        <tr><td class="num">1</td><td class="mono">STALE_REFRESH</td><td>Refresh Content</td><td class="num">100.0</td></tr>
+        <tr><td class="num">2–4</td><td class="mono">STALE_REFRESH</td><td>Refresh Content</td><td class="num">80.0</td></tr>
+        <tr><td class="num">5–20</td><td class="mono">STALE_REFRESH</td><td>Refresh Content</td><td class="num">70.0</td></tr>
+      </tbody>
+    </table>
+    <p class="chart-caption">Top of the 30,000-row queue is dominated by stale, low-engagement pages sitting in strong ranking positions — the highest-leverage refresh candidates, per the baseline rule's own logic. The full ranked queue is exported to <code>outputs/action_playbook_queue.csv</code>.</p>
+    <h3>Archetype → action mapping</h3>
+    <ul>
+      <li>Stale content → <strong>STALE_REFRESH</strong> → Refresh Content</li>
+      <li>Existing content with a quick opportunity → <strong>QUICK_WIN</strong> → Optimise Existing Content</li>
+      <li>Ambiguous or weak signals → human review before assigning an action</li>
+    </ul>
+  </section>
+
+  <section id="repro">
+    <h2><span class="num">07</span>Reproducibility</h2>
+    <div class="kv">
+      <dt>Notebooks</dt><dd><code>work/notebooks/w04_baseline_score.ipynb</code> · <code>w05_model.ipynb</code> · <code>w06_validation_audit.ipynb</code> · <code>w07_action_playbook.ipynb</code></dd>
+      <dt>Run order</dt><dd>Run each top to bottom (Runtime → Run all) in numeric order — w05 and later assume the Week-4 baseline scoring has already been reproduced.</dd>
+      <dt>Seed</dt><dd><code>random_state = 42</code>, used for the client-grouped split</dd>
+      <dt>Core packages</dt><dd><code>pandas</code>, <code>numpy</code>, <code>scikit-learn</code> — pin exact versions in a <code>requirements.txt</code> at the repo root before final submission</dd>
+      <dt>Output</dt><dd><code>outputs/action_playbook_queue.csv</code> — 30,000 ranked rows: <code>content_id</code>, <code>score</code>, <code>reason_code</code>, <code>action_label</code></dd>
+      <dt>Submission file</dt><dd><code>submission/paper_url.txt</code> at the repo root — must hold the single deployed URL of this page</dd>
+    </div>
+  </section>
+
+  <footer>
+    <p>Built on the <strong>FlyRank ML Internship dataset</strong> — data credit: <a href="https://flyrank.ai" target="_blank" rel="noopener">flyrank.ai</a>.</p>
+    <p>No client names, domains, URLs, or private queries appear in this paper or its underlying notebooks.</p>
+  </footer>
+
+</div>
+</body>
+</html>

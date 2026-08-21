@@ -1,9 +1,13 @@
-# Capstone Report —
+# Capstone Report
 
 - **Author:** Hadia Fatima
 - **Lane:** Refresh / Content Opportunity Scoring
 - **Repo:** https://github.com/hadiafatima007/flyrank-ai-ml-internship
 - **Date:** 2026-08-10
+
+## Abstract
+
+Which content pages should be reviewed first for a possible refresh, and does a learned model rank them better than a transparent hand-written rule? A rule-based baseline (staleness, search demand, ranking opportunity, CTR opportunity) and a client-grouped Logistic Regression classifier were each evaluated on the anonymized FlyRank content-refresh dataset — 30,000 rows across 32 pseudonymous clients — using an identical held-out split of 7 test clients versus 25 training clients, with zero client overlap. On that split, the model reached a Precision@50 of **0.72** against **0.54** for the baseline, an observed 18-percentage-point improvement over a 51.1% test decline base rate. Historical engagement signals — 90-day users and sessions, days with impressions or sessions — carried the strongest weight in the model, more than content age or raw search demand alone. The output is a ranked review queue with reason codes for human editorial judgment, not an automated or causal claim about future performance.
 
 ## 1. Problem framing
 
@@ -35,7 +39,7 @@ The target was defined as:
 
 The model therefore predicts an **observed decline label**, not a future causal effect.
 
-The release exposes 90-day aggregate performance fields and a last-30-days versus previous-30-days comparison. The completed notebooks do not establish calendar start/end dates for the release, so no calendar date window is invented here.
+The release exposes 90-day aggregate performance fields and a last-30-days versus previous-30-days comparison. The completed notebooks do not establish calendar start/end dates for the release, so no calendar date window is invented here — confirm against the Hugging Face dataset card before final submission if an exact window is required.
 
 The data is anonymized. No client names, domains, URLs, private queries, credentials, or raw client exports are included in the analysis outputs. Pseudonymous IDs are used only where necessary for grouping and identification inside the dataset.
 
@@ -81,36 +85,11 @@ It fits the lane because the task is to identify pages associated with the obser
 
 The numerical features used were:
 
-- `search_volume`
-- `competition`
-- `cpc`
-- `word_count`
-- `char_count`
-- `impressions_90d`
-- `clicks_90d`
-- `pageviews_90d`
-- `sessions_90d`
-- `users_90d`
-- `engaged_sessions_90d`
-- `ai_sessions_90d`
-- `scroll_events_90d`
-- `days_with_impressions`
-- `days_with_sessions`
-- `content_age_days`
-- `age_tier_order`
-- `days_since_last_update`
-- `ctr`
-- `avg_position`
-- `engagement_rate`
-- `scroll_rate`
-- `ai_traffic_pct`
+`search_volume`, `competition`, `cpc`, `word_count`, `char_count`, `impressions_90d`, `clicks_90d`, `pageviews_90d`, `sessions_90d`, `users_90d`, `engaged_sessions_90d`, `ai_sessions_90d`, `scroll_events_90d`, `days_with_impressions`, `days_with_sessions`, `content_age_days`, `age_tier_order`, `days_since_last_update`, `ctr`, `avg_position`, `engagement_rate`, `scroll_rate`, `ai_traffic_pct`
 
 The categorical features used were:
 
-- `competition_level`
-- `content_type`
-- `main_intent`
-- `provider_used`
+`competition_level`, `content_type`, `main_intent`, `provider_used`
 
 Numeric missing values were median-imputed and standardized. Categorical missing values were filled with the most frequent value and then one-hot encoded. The classifier was Logistic Regression with `max_iter=1000`.
 
@@ -269,3 +248,7 @@ Before submission, run the notebooks from top to bottom and verify that the repo
 ---
 
 > **Claims checklist before submitting:** observed / measured / directional / decision-support **Metrics vs. base rate:** the test decline base rate is 51.1%, reported next to Precision@50. No causal claims are made. No claim is made about predicting Google's algorithm. No client-identifying details, private queries, credentials, or raw exports are included.
+
+## Acknowledgments & data credit
+
+Built on the **FlyRank ML Internship dataset** — [flyrank.ai](https://flyrank.ai)
